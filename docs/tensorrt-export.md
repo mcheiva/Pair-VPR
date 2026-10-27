@@ -33,7 +33,6 @@ python -m scripts.parity.compare --trt Model/PairVPR_ViTB_Encoder_mixed_o5.plan 
 python -m scripts.parity.test_exact
 python -m scripts.eval_eiva_vpr --fp32 --trt Model/PairVPR_ViTB_Encoder_mixed_o5.plan
 python -m scripts.parity.export_cpp_inputs runs/parity/cpp_in     # inputs for the C++ parity tool (below)
-python -m scripts.parity.debug_encoder --variant base --trt     # per-block divergence (below; study tooling)
 ```
 
 Export: static shapes, opset 18 (opset 20 compiled silently wrong on TRT 10.x for MAC-VO), a warm-up forward under `inference_mode`, `do_constant_folding=False`, precision fixed in PyTorch (strongly typed build), preprocessing only in the consumer (`scripts/parity/common.preprocess`). Build: strongly typed, `parse_from_file`, optimization level 5, avg timing 8, tiling 0, weight streaming on, DETAILED profiling verbosity, timing cache loaded with `ignore_mismatch=False` and saved atomically, `.plan.json` sidecar in the MAC-VO schema, write order sidecar-delete, plan, sidecar, cache. Plans are named `_o<opt level>` (`_o5` here).
@@ -55,7 +54,7 @@ The fp32 reference runs with the MATH SDPA backend (DINOv2 attention calls SDPA)
 The fast TRT encoder has 0.75 % of dense tokens with cosine < 0.98 to fp32 (190 of 25392; worst 0.20), versus 4 tokens for torch fp16 (worst 0.905), while the descriptor stays at cosine >= 0.9999.
 
 * **Which tokens.** Not a fixed set: 125 distinct token indices over 42 of 48 frames, none more than 6 times. Not high-norm tokens (fp32 norm 25.7 for the outliers vs 24.2 on average; the residual stream peaks at 73, far from fp16's 65504, so no overflow). 21 of the 33 tokens torch fp16 gets below 0.995 are among TRT's outliers: both hit the same fragile tokens, TRT much harder.
-* **Where it starts** (`debug_encoder.py`, residual stream after each block, per-token cosine vs torch fp32, p01 / min / tokens < 0.98 of 25632). TRT diverges from block 1 and compounds; torch fp16 stays about 5x closer until block 9. The probe plan reproduces the shipped numbers exactly (dense 0.98668 / 0.1999 / 190), so the extra outputs did not change the defect.
+* **Where it starts** (`scripts/parity/debug_encoder.py`, study tooling kept only in commit 1fc86af: `git show 1fc86af:scripts/parity/debug_encoder.py`; residual stream after each block, per-token cosine vs torch fp32, p01 / min / tokens < 0.98 of 25632). TRT diverges from block 1 and compounds; torch fp16 stays about 5x closer until block 9. The probe plan reproduces the shipped numbers exactly (dense 0.98668 / 0.1999 / 190), so the extra outputs did not change the defect.
 
 | block | 1 | 4 | 6 | 8 | 9 | 10 | 11 | 12 |
 |---|---|---|---|---|---|---|---|---|
