@@ -1,0 +1,7 @@
+trained_models/*.pth
+*.onnx
+*.onnx.data
+*.plan
+*.timing.cache
+runs/
+__pycache__/
